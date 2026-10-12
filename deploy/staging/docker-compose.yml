@@ -1,5 +1,7 @@
 # Adam PreCare — staging (Mac mini 10.8.0.246). Dijalankan oleh deploy/staging/deploy.sh.
 # Port host: web 3100 (3000 dipakai layanan lain), api 4000. DB/Redis tidak dibuka ke host.
+# Domain (Cloudflare): web https://precare.adamlabs.dev → :3100, API https://api-precare.adamlabs.dev → :4000.
+# mem_limit: staging dipakai bersama (VM Docker 8 GB, ±80 container lain).
 name: adam-precare-staging
 
 services:
@@ -7,6 +9,7 @@ services:
     image: postgis/postgis:16-3.4
     platform: linux/amd64
     restart: unless-stopped
+    mem_limit: 512m
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -22,6 +25,7 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
+    mem_limit: 128m
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -36,6 +40,7 @@ services:
       context: ../..
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    mem_limit: 512m
     env_file: .env
     environment:
       NODE_ENV: production
@@ -65,6 +70,7 @@ services:
         NEXT_PUBLIC_SOCKET_URL: ${PUBLIC_API_URL}
         NEXT_PUBLIC_SOCKET_PATH: /realtime
     restart: unless-stopped
+    mem_limit: 384m
     ports:
       - "3100:3000"
     depends_on:

@@ -4,7 +4,7 @@
 
 | Lingkungan | Mesin | URL |
 |---|---|---|
-| Staging | Mac mini `10.8.0.246` (VPN), user `adamlabs` | Web http://10.8.0.246:3100 · API https://api-precare.adamlabs.dev/v1 (Cloudflare → :4000; juga http://10.8.0.246:4000/v1 di VPN) · Realtime path `/realtime` |
+| Staging | Mac mini `10.8.0.246` (VPN), user `adamlabs` | Web https://precare.adamlabs.dev (Cloudflare → :3100; juga http://10.8.0.246:3100 di VPN) · API https://api-precare.adamlabs.dev/v1 (Cloudflare → :4000; juga http://10.8.0.246:4000/v1 di VPN) · Realtime path `/realtime` |
 
 Staging dipakai bersama banyak layanan lain (±80 container). Port Adam PreCare: **3100** (web; 3000 sudah dipakai) dan **4000** (API). PostgreSQL & Redis staging tidak dibuka ke host.
 

@@ -20,7 +20,7 @@ jobs:
     runs-on: [self-hosted, macOS, staging]
     environment:
       name: staging
-      url: http://10.8.0.246:3100
+      url: https://precare.adamlabs.dev
     steps:
       - uses: actions/checkout@v4
         with:
