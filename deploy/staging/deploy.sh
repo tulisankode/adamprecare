@@ -8,6 +8,14 @@ set -euo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.docker/bin:$PATH"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+
+# Pengaman disk: build penuh pernah menghabiskan disk staging hingga Docker Desktop crash
+FREE_GB=$(df -Pk "$HOME" | awk 'NR==2{printf "%d", $4/1048576}')
+if (( FREE_GB < ${MIN_FREE_GB:-8} )); then
+  echo "ERROR: disk tersisa ${FREE_GB} GB (< ${MIN_FREE_GB:-8} GB). Bersihkan dulu: docker builder prune -af" >&2
+  exit 1
+fi
+
 STAGING="$ROOT/deploy/staging"
 STATE_DIR="${PRECARE_STATE_DIR:-$HOME/.adam-precare-staging}"
 cd "$STAGING"
@@ -64,6 +72,7 @@ if healthy; then
   echo "$NEW_TAG" > "$STATE_DIR/current_tag"
   [[ -n "$PREV_TAG" && "$PREV_TAG" != "$NEW_TAG" ]] && echo "$PREV_TAG" > "$STATE_DIR/previous_tag"
   docker image prune -f --filter "label!=keep" >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true   # cache build bisa puluhan GB
   echo "==> Deploy $NEW_TAG berhasil: web https://precare.adamlabs.dev  api ${PUBLIC_API_URL}/v1"
 else
   echo "ERROR: health check gagal untuk $NEW_TAG" >&2
