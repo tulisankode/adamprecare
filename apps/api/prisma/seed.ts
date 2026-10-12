@@ -11,7 +11,9 @@ import { existsSync } from 'fs';
 import { CryptoService } from '../src/core/crypto.service';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
-if (process.env.NODE_ENV === 'production') throw new Error('Seed tidak boleh dijalankan di produksi.');
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== '1') {
+  throw new Error('Seed tidak boleh dijalankan di produksi (set ALLOW_SEED=1 hanya untuk staging).');
+}
 
 const prisma = new PrismaClient();
 const crypto = new CryptoService({ get: (key: string) => process.env[key] } as never);

@@ -41,7 +41,7 @@ if [[ "${RUN_SEED:-0}" == "1" ]]; then
   USERS="$(compose exec -T postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc 'SELECT count(*) FROM users' 2>/dev/null || echo 0)"
   if [[ "$USERS" == "0" ]]; then
     echo "==> Database kosong → seed data contoh"
-    IMAGE_TAG="$NEW_TAG" compose run --rm --no-deps api npx ts-node --transpile-only prisma/seed.ts
+    IMAGE_TAG="$NEW_TAG" compose run --rm --no-deps -e ALLOW_SEED=1 api npx ts-node --transpile-only prisma/seed.ts
   else
     echo "==> Seed dilewati (database sudah berisi $USERS pengguna)"
   fi
