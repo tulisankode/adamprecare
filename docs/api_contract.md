@@ -8,7 +8,7 @@ Sumber kebenaran bersama untuk **API (NestJS)**, **dashboard web (Next.js)**, da
 
 | Aspek | Aturan |
 |---|---|
-| Base URL | `{API_BASE_URL}/v1` — dev: `http://localhost:4000/v1` |
+| Base URL | `{API_BASE_URL}/v1` — dev: `http://localhost:4000/v1`, staging: `https://api-precare.adamlabs.dev/v1` |
 | Format | JSON, `Content-Type: application/json` (kecuali upload: `multipart/form-data`) |
 | Penamaan field | `snake_case` |
 | Autentikasi | `Authorization: Bearer <access_token>` |

@@ -52,8 +52,8 @@ Bahasa antarmuka: **Bahasa Indonesia**.
 Variabel lingkungan:
 
 ```
-EXPO_PUBLIC_API_BASE_URL=http://localhost:4000/v1
-EXPO_PUBLIC_SOCKET_URL=http://localhost:4000
+EXPO_PUBLIC_API_BASE_URL=https://api-precare.adamlabs.dev/v1
+EXPO_PUBLIC_SOCKET_URL=https://api-precare.adamlabs.dev
 EXPO_PUBLIC_SOCKET_PATH=/realtime
 EXPO_PUBLIC_USE_MOCK=true
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=
@@ -276,7 +276,7 @@ Rujukan gambar mockup ditulis di kurung siku.
 
 ## 8. Kontrak API (ringkas — untuk aplikasi mobile)
 
-Base URL `EXPO_PUBLIC_API_BASE_URL` (mis. `http://localhost:4000/v1`). JSON `snake_case`. Header `Authorization: Bearer <access_token>`.
+Base URL `EXPO_PUBLIC_API_BASE_URL` — staging: `https://api-precare.adamlabs.dev/v1` (akun uji: pengguna `demo@adamprecare.id` / `password123`, petugas `petugas01` / `password123`). JSON `snake_case`. Header `Authorization: Bearer <access_token>`.
 
 **Respons**: sukses `{ "data": ... }`, dengan pagination `{ "data": [...], "meta": { "page", "per_page", "total", "total_pages" } }`, gagal `{ "error": { "code", "message", "details"? } }`.
 
