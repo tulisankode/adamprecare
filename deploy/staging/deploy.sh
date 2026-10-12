@@ -72,7 +72,7 @@ if healthy; then
   echo "$NEW_TAG" > "$STATE_DIR/current_tag"
   [[ -n "$PREV_TAG" && "$PREV_TAG" != "$NEW_TAG" ]] && echo "$PREV_TAG" > "$STATE_DIR/previous_tag"
   docker image prune -f --filter "label!=keep" >/dev/null 2>&1 || true
-  docker builder prune -af >/dev/null 2>&1 || true   # cache build bisa puluhan GB
+  docker builder prune -f --max-used-space 8gb >/dev/null 2>&1 || true   # batasi cache build ±8 GB (tanpa batas bisa puluhan GB)
   echo "==> Deploy $NEW_TAG berhasil: web https://precare.adamlabs.dev  api ${PUBLIC_API_URL}/v1"
 else
   echo "ERROR: health check gagal untuk $NEW_TAG" >&2
