@@ -1,0 +1,553 @@
+// Skema database Adam PreCare. Lihat docs/desain_system.md §6.
+// Kolom geospasial memakai lat/lng (double) + PostGIS lewat raw SQL (index di migrasi).
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum Role {
+  USER
+  CREW
+  FACILITY_OPERATOR
+  FACILITY_ADMIN
+  SUPER_ADMIN
+}
+
+enum Gender {
+  L
+  P
+}
+
+enum FacilityType {
+  RUMAH_SAKIT
+  KLINIK
+  PUSKESMAS
+  PSC_119
+}
+
+enum IntegrationMode {
+  DASHBOARD
+  API
+}
+
+enum MedicalRecordSource {
+  MANUAL
+  SIMRS
+}
+
+enum SimrsStatus {
+  NOT_CONFIGURED
+  PENDING
+  FOUND
+  NOT_FOUND
+  NO_IDENTITY
+  ERROR
+}
+
+enum SimrsVendor {
+  ADAMEDS
+  MOCK
+}
+
+enum SimrsAuthMode {
+  API_KEY
+  SERVICE_ACCOUNT
+}
+
+enum AmbulanceType {
+  PASIEN
+  GAWAT_DARURAT
+  JENAZAH
+}
+
+enum AmbulanceStatus {
+  TERSEDIA
+  BERTUGAS
+  NONAKTIF
+}
+
+enum CasePriority {
+  TINGGI
+  NORMAL
+}
+
+enum DispatchStrategy {
+  PARALEL
+  PSC_DULU
+  BERURUTAN
+}
+
+enum RequestStatus {
+  MENUNGGU
+  DITERIMA
+  DALAM_PERJALANAN
+  TIBA
+  MENUJU_FASKES
+  SAMPAI_DI_FASKES
+  SELESAI
+  DIBATALKAN
+  TIDAK_TERLAYANI
+}
+
+enum ProviderType {
+  FASKES_MITRA
+  PSC_119
+}
+
+enum OfferStatus {
+  OFFERED
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  WITHDRAWN
+}
+
+enum OtpPurpose {
+  REGISTER
+  RESET_PASSWORD
+  VERIFY_PHONE
+}
+
+enum Platform {
+  android
+  ios
+}
+
+model User {
+  id              String    @id @default(uuid()) @db.Uuid
+  role            Role      @default(USER)
+  name            String    @db.VarChar(100)
+  username        String?   @unique @db.VarChar(50)
+  email           String?   @unique @db.VarChar(150)
+  phone           String?   @unique @db.VarChar(20)
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  passwordHash    String?   @map("password_hash")
+  googleSub       String?   @unique @map("google_sub")
+  nikEncrypted    String?   @map("nik_encrypted")
+  nikHash         String?   @map("nik_hash") @db.Char(64)
+  birthDate       DateTime? @map("birth_date") @db.Date
+  gender          Gender?
+  avatarUrl       String?   @map("avatar_url")
+  facilityId      String?   @map("facility_id") @db.Uuid
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  facility      Facility?          @relation(fields: [facilityId], references: [id])
+  patients      Patient[]
+  requests      EmergencyRequest[] @relation("Reporter")
+  devices       Device[]
+  refreshTokens RefreshToken[]
+  crew          AmbulanceCrew?
+  notifications Notification[]
+
+  @@index([facilityId])
+  @@map("users")
+}
+
+model Facility {
+  id                  String              @id @default(uuid()) @db.Uuid
+  name                String              @db.VarChar(150)
+  type                FacilityType
+  address             String
+  lat                 Float
+  lng                 Float
+  serviceArea         Unsupported("geography(MultiPolygon, 4326)")? @map("service_area")
+  phone               String              @db.VarChar(20)
+  photoUrl            String?             @map("photo_url")
+  acceptsEmergency    Boolean             @default(true) @map("accepts_emergency")
+  showInDirectory     Boolean             @default(true) @map("show_in_directory")
+  integrationMode     IntegrationMode     @default(DASHBOARD) @map("integration_mode")
+  medicalRecordSource MedicalRecordSource @default(MANUAL) @map("medical_record_source")
+  medicalRecordFormat String?             @map("medical_record_format")
+  isActive            Boolean             @default(true) @map("is_active")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  polyclinics      FacilityPolyclinic[]
+  ambulances       Ambulance[]
+  staff            User[]
+  offers           DispatchOffer[]
+  requests         EmergencyRequest[]      @relation("Provider")
+  destinations     EmergencyRequest[]      @relation("Destination")
+  simrsIntegration SimrsIntegration?
+  patientRecords   FacilityPatientRecord[]
+
+  @@map("facilities")
+}
+
+model Polyclinic {
+  id         String               @id @default(uuid()) @db.Uuid
+  name       String               @unique @db.VarChar(100)
+  facilities FacilityPolyclinic[]
+
+  @@map("polyclinics")
+}
+
+model FacilityPolyclinic {
+  facilityId   String     @map("facility_id") @db.Uuid
+  polyclinicId String     @map("polyclinic_id") @db.Uuid
+  facility     Facility   @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  polyclinic   Polyclinic @relation(fields: [polyclinicId], references: [id], onDelete: Cascade)
+
+  @@id([facilityId, polyclinicId])
+  @@map("facility_polyclinics")
+}
+
+model SimrsIntegration {
+  id                          String        @id @default(uuid()) @db.Uuid
+  facilityId                  String        @unique @map("facility_id") @db.Uuid
+  vendor                      SimrsVendor
+  config                      Json          @default("{}")
+  externalTenantId            String?       @map("external_tenant_id")
+  authMode                    SimrsAuthMode @default(API_KEY) @map("auth_mode")
+  credentialsEncrypted        String?       @map("credentials_encrypted")
+  supportsPatientRegistration Boolean       @default(false) @map("supports_patient_registration")
+  supportsPreArrival          Boolean       @default(false) @map("supports_pre_arrival")
+  isActive                    Boolean       @default(true) @map("is_active")
+  createdAt                   DateTime      @default(now()) @map("created_at")
+  updatedAt                   DateTime      @updatedAt @map("updated_at")
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@map("simrs_integrations")
+}
+
+model Ambulance {
+  id             String          @id @default(uuid()) @db.Uuid
+  facilityId     String          @map("facility_id") @db.Uuid
+  name           String          @db.VarChar(100)
+  plateNumber    String          @map("plate_number") @db.VarChar(20)
+  type           AmbulanceType
+  photoUrl       String?         @map("photo_url")
+  status         AmbulanceStatus @default(TERSEDIA)
+  lastLat        Float?          @map("last_lat")
+  lastLng        Float?          @map("last_lng")
+  lastHeading    Float?          @map("last_heading")
+  lastLocationAt DateTime?       @map("last_location_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  facility Facility              @relation(fields: [facilityId], references: [id])
+  crew     AmbulanceCrew[]
+  requests EmergencyRequest[]
+  logs     AmbulanceLocationLog[]
+
+  @@unique([facilityId, plateNumber])
+  @@map("ambulances")
+}
+
+model AmbulanceCrew {
+  userId      String    @id @map("user_id") @db.Uuid
+  ambulanceId String    @map("ambulance_id") @db.Uuid
+  onDuty      Boolean   @default(false) @map("on_duty")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ambulance   Ambulance @relation(fields: [ambulanceId], references: [id], onDelete: Cascade)
+
+  @@index([ambulanceId])
+  @@map("ambulance_crews")
+}
+
+model CaseType {
+  id               String           @id @default(uuid()) @db.Uuid
+  code             String           @unique @db.VarChar(30)
+  name             String           @db.VarChar(100)
+  icon             String           @db.VarChar(50)
+  color            String           @db.VarChar(9)
+  priority         CasePriority     @default(NORMAL)
+  dispatchStrategy DispatchStrategy @default(BERURUTAN) @map("dispatch_strategy")
+  sortOrder        Int              @default(0) @map("sort_order")
+  isActive         Boolean          @default(true) @map("is_active")
+
+  requests EmergencyRequest[]
+
+  @@map("case_types")
+}
+
+model Patient {
+  id                String    @id @default(uuid()) @db.Uuid
+  ownerUserId       String    @map("owner_user_id") @db.Uuid
+  isSelf            Boolean   @default(false) @map("is_self")
+  name              String?   @db.VarChar(100)
+  nameUnknown       Boolean   @default(false) @map("name_unknown")
+  identityEncrypted String?   @map("identity_encrypted")
+  identityHash      String?   @map("identity_hash") @db.Char(64)
+  identityUnknown   Boolean   @default(false) @map("identity_unknown")
+  ageYears          Int?      @map("age_years") @db.SmallInt
+  birthDate         DateTime? @map("birth_date") @db.Date
+  gender            Gender?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  owner          User                    @relation(fields: [ownerUserId], references: [id])
+  requests       EmergencyRequest[]
+  facilityRecord FacilityPatientRecord[]
+
+  @@index([ownerUserId])
+  @@index([identityHash])
+  @@map("patients")
+}
+
+model EmergencyRequest {
+  id                    String         @id @default(uuid()) @db.Uuid
+  code                  String         @unique @db.VarChar(30)
+  clientRequestId       String         @map("client_request_id") @db.Uuid
+  reporterUserId        String         @map("reporter_user_id") @db.Uuid
+  patientId             String         @map("patient_id") @db.Uuid
+  caseTypeId            String         @map("case_type_id") @db.Uuid
+  caseTypeOther         String?        @map("case_type_other") @db.VarChar(100)
+  description           String
+  lat                   Float
+  lng                   Float
+  address               String
+  status                RequestStatus  @default(MENUNGGU)
+  providerType          ProviderType?  @map("provider_type")
+  facilityId            String?        @map("facility_id") @db.Uuid
+  ambulanceId           String?        @map("ambulance_id") @db.Uuid
+  destinationFacilityId String?        @map("destination_facility_id") @db.Uuid
+  etaSeconds            Int?           @map("eta_seconds")
+  dispatchRound         Int            @default(0) @map("dispatch_round")
+  cancelReason          String?        @map("cancel_reason")
+  cancelledById         String?        @map("cancelled_by") @db.Uuid
+  escalatedAt           DateTime?      @map("escalated_at")
+  requestedAt           DateTime       @default(now()) @map("requested_at")
+  acceptedAt            DateTime?      @map("accepted_at")
+  departedAt            DateTime?      @map("departed_at")
+  arrivedAt             DateTime?      @map("arrived_at")
+  transportingAt        DateTime?      @map("transporting_at")
+  reachedFacilityAt     DateTime?      @map("reached_facility_at")
+  completedAt           DateTime?      @map("completed_at")
+  cancelledAt           DateTime?      @map("cancelled_at")
+  unservedAt            DateTime?      @map("unserved_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  reporter    User                   @relation("Reporter", fields: [reporterUserId], references: [id])
+  patient     Patient                @relation(fields: [patientId], references: [id])
+  caseType    CaseType               @relation(fields: [caseTypeId], references: [id])
+  facility    Facility?              @relation("Provider", fields: [facilityId], references: [id])
+  destination Facility?              @relation("Destination", fields: [destinationFacilityId], references: [id])
+  ambulance   Ambulance?             @relation(fields: [ambulanceId], references: [id])
+  photos      EmergencyPhoto[]
+  statusLogs  EmergencyStatusLog[]
+  offers      DispatchOffer[]
+  locations   AmbulanceLocationLog[]
+
+  @@unique([reporterUserId, clientRequestId])
+  @@index([status])
+  @@index([facilityId, requestedAt])
+  @@index([requestedAt])
+  @@map("emergency_requests")
+}
+
+model EmergencyPhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  requestId String   @map("request_id") @db.Uuid
+  objectKey String   @map("object_key")
+  mimeType  String   @map("mime_type") @db.VarChar(50)
+  sizeBytes Int      @map("size_bytes")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  request EmergencyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@map("emergency_photos")
+}
+
+model EmergencyStatusLog {
+  id          String         @id @default(uuid()) @db.Uuid
+  requestId   String         @map("request_id") @db.Uuid
+  fromStatus  RequestStatus? @map("from_status")
+  toStatus    RequestStatus  @map("to_status")
+  actorUserId String?        @map("actor_user_id") @db.Uuid
+  note        String?
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  request EmergencyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, createdAt])
+  @@map("emergency_status_logs")
+}
+
+model DispatchOffer {
+  id            String      @id @default(uuid()) @db.Uuid
+  requestId     String      @map("request_id") @db.Uuid
+  facilityId    String      @map("facility_id") @db.Uuid
+  round         Int         @default(1)
+  status        OfferStatus @default(OFFERED)
+  offeredAt     DateTime    @default(now()) @map("offered_at")
+  expiresAt     DateTime    @map("expires_at")
+  respondedAt   DateTime?   @map("responded_at")
+  respondedById String?     @map("responded_by") @db.Uuid
+  rejectReason  String?     @map("reject_reason")
+
+  request  EmergencyRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  facility Facility         @relation(fields: [facilityId], references: [id])
+
+  @@unique([requestId, facilityId])
+  @@index([facilityId, status])
+  @@map("dispatch_offers")
+}
+
+model FacilityPatientRecord {
+  id              String              @id @default(uuid()) @db.Uuid
+  facilityId      String              @map("facility_id") @db.Uuid
+  patientId       String              @map("patient_id") @db.Uuid
+  medicalRecordNo String?             @map("medical_record_no") @db.VarChar(30)
+  source          MedicalRecordSource
+  simrsStatus     SimrsStatus         @default(NOT_CONFIGURED) @map("simrs_status")
+  simrsMessage    String?             @map("simrs_message")
+  syncedAt        DateTime?           @map("synced_at")
+  createdById     String?             @map("created_by") @db.Uuid
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  facility Facility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([facilityId, patientId])
+  @@index([facilityId, medicalRecordNo])
+  @@map("facility_patient_records")
+}
+
+model AmbulanceLocationLog {
+  id          BigInt    @id @default(autoincrement())
+  requestId   String?   @map("request_id") @db.Uuid
+  ambulanceId String    @map("ambulance_id") @db.Uuid
+  lat         Float
+  lng         Float
+  heading     Float?
+  speed       Float?
+  recordedAt  DateTime  @default(now()) @map("recorded_at")
+
+  request   EmergencyRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  ambulance Ambulance         @relation(fields: [ambulanceId], references: [id], onDelete: Cascade)
+
+  @@index([requestId, recordedAt])
+  @@map("ambulance_location_logs")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String    @db.VarChar(50)
+  title     String    @db.VarChar(150)
+  body      String
+  requestId String?   @map("request_id") @db.Uuid
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model Article {
+  id          String    @id @default(uuid()) @db.Uuid
+  slug        String    @unique @db.VarChar(150)
+  title       String    @db.VarChar(200)
+  coverUrl    String?   @map("cover_url")
+  excerpt     String?
+  bodyHtml    String    @map("body_html")
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("articles")
+}
+
+model Banner {
+  id          String    @id @default(uuid()) @db.Uuid
+  title       String    @db.VarChar(150)
+  imageUrl    String    @map("image_url")
+  actionUrl   String?   @map("action_url")
+  sortOrder   Int       @default(0) @map("sort_order")
+  activeFrom  DateTime? @map("active_from")
+  activeUntil DateTime? @map("active_until")
+
+  @@map("banners")
+}
+
+model Page {
+  slug      String   @id @db.VarChar(50)
+  title     String   @db.VarChar(150)
+  bodyHtml  String   @map("body_html")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("pages")
+}
+
+model AppVersion {
+  id                  String   @id @default(uuid()) @db.Uuid
+  platform            Platform
+  version             String   @db.VarChar(20)
+  minSupportedVersion String   @map("min_supported_version") @db.VarChar(20)
+  releaseNotes        String   @map("release_notes")
+  releasedAt          DateTime @default(now()) @map("released_at")
+
+  @@index([platform, releasedAt])
+  @@map("app_versions")
+}
+
+model Device {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  fcmToken   String   @unique @map("fcm_token")
+  platform   Platform
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("devices")
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model OtpCode {
+  id         String     @id @default(uuid()) @db.Uuid
+  target     String     @db.VarChar(150)
+  purpose    OtpPurpose
+  codeHash   String     @map("code_hash") @db.Char(64)
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @map("expires_at")
+  consumedAt DateTime?  @map("consumed_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([target, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String   @db.VarChar(80)
+  entity    String   @db.VarChar(50)
+  entityId  String?  @map("entity_id")
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}

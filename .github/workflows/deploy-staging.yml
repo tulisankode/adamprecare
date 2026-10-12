@@ -1,0 +1,29 @@
+# Deploy ke staging (Mac mini 10.8.0.246, jaringan VPN) lewat runner self-hosted.
+# Alur: merge/push ke branch `staging` → CI lulus → deploy/staging/deploy.sh di staging.
+name: Deploy Staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: [self-hosted, macOS, staging]
+    environment:
+      name: staging
+      url: http://10.8.0.246:3100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          clean: true
+      - name: Deploy
+        run: ./deploy/staging/deploy.sh

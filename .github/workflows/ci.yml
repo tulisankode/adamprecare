@@ -1,0 +1,68 @@
+# CI: typecheck, unit test, e2e (Postgres+PostGIS & Redis), lint & build web.
+# Jalan di runner GitHub (cloud) untuk setiap push/PR; juga dipanggil oleh deploy-staging.yml.
+name: CI
+
+on:
+  push:
+    branches-ignore: [staging]
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: precare
+          POSTGRES_PASSWORD: precare
+          POSTGRES_DB: precare
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U precare -d precare"
+          --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["56379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Siapkan .env API untuk test
+        working-directory: apps/api
+        run: |
+          gen() { node -e "console.log(require('crypto').randomBytes($1).toString('base64url'))"; }
+          sed -e "s|^JWT_ACCESS_SECRET=.*|JWT_ACCESS_SECRET=$(gen 48)|" \
+              -e "s|^JWT_RESET_SECRET=.*|JWT_RESET_SECRET=$(gen 48)|" \
+              -e "s|^FILE_URL_SECRET=.*|FILE_URL_SECRET=$(gen 48)|" \
+              -e "s|^DATA_ENCRYPTION_KEY=.*|DATA_ENCRYPTION_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")|" \
+              -e "s|^HASH_PEPPER=.*|HASH_PEPPER=$(gen 32)|" .env.example > .env
+      - run: npx -w apps/api prisma generate
+      - run: npm run typecheck -w apps/api
+      - run: npm test -w apps/api
+      - run: npm run test:e2e -w apps/api
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint -w apps/web
+      - run: npm run build -w apps/web
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/v1
+          NEXT_PUBLIC_SOCKET_URL: http://localhost:4000
+          NEXT_PUBLIC_SOCKET_PATH: /realtime

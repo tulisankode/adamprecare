@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* Design tokens — docs/desain_system.md §12 */
+@theme {
+  --font-sans: var(--font-poppins), system-ui, sans-serif;
+
+  --color-primary: #e95b58;
+  --color-primary-pressed: #d04643;
+  --color-primary-soft: #fdefee;
+  --color-primary-ring: #f8c9c7;
+  --color-on-primary: #ffffff;
+  --color-warning: #e89f29;
+  --color-warning-soft: #fce0b3;
+  --color-warning-subtle: #faedd7;
+
+  --color-ink: #1e1e1e;
+  --color-body: #3f3f3f;
+  --color-muted: #9d9d9d;
+  --color-muted-strong: #6b7280;
+  --color-icon-inactive: #b2b9c6;
+  --color-line: #d0d5dd;
+  --color-divider: #e6e8ec;
+  --color-surface: #ffffff;
+  --color-background: #fcfcfc;
+
+  --color-success: #2e9e5b;
+  --color-success-soft: #e6f5ec;
+  --color-info: #3a7bd5;
+  --color-info-soft: #e8f0fb;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef3f2;
+
+  --color-web-bg: #eef4f9;
+  --color-table-header: #fdefee;
+  --color-row-alt: #f7f7f7;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 24px;
+
+  --shadow-card: 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-panel: -8px 0 24px rgba(16, 24, 40, 0.12);
+
+  --text-caption: 11px;
+  --text-caption--line-height: 16px;
+  --text-label: 13px;
+  --text-label--line-height: 20px;
+
+  --animate-pulse-ring: pulse-ring 1.6s ease-out infinite;
+  @keyframes pulse-ring {
+    0% {
+      box-shadow: 0 0 0 0 rgba(232, 159, 41, 0.55);
+    }
+    100% {
+      box-shadow: 0 0 0 8px rgba(232, 159, 41, 0);
+    }
+  }
+}
+
+html,
+body {
+  background: var(--color-web-bg);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Visible keyboard focus everywhere */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary-pressed);
+  outline-offset: 2px;
+}
+
+/* Native date input: keep text compact and calendar icon clickable over the whole field */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* Thin red scrollbars like the mockup */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-primary) transparent;
+}
+
+.leaflet-container {
+  font-family: var(--font-sans);
+  z-index: 0;
+}
+
+.amb-marker,
+.pin-marker {
+  background: transparent;
+  border: none;
+}
